@@ -3,6 +3,9 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { useProgress } from "@/contexts/UserProgressContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useGameAudio } from "@/hooks/useGameAudio";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceSettings } from "@/hooks/useVoiceSettings";
+import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, SkipForward, Lightbulb, RotateCcw, Sparkles } from "lucide-react";
@@ -10,6 +13,9 @@ import { OutOfCreditsModal } from "@/components/OutOfCreditsModal";
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/utils";
 import { languageLabels } from "@/data/lessonsByLanguage";
+import { getVoiceLanguage } from "@/lib/voice/language";
+import { MicButton } from "@/components/voice/MicButton";
+import { VoiceTranscript } from "@/components/voice/VoiceTranscript";
 import {
   generatePrompts,
   evaluateAnswer,
@@ -22,6 +28,7 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: string;
+  transcript?: string;
 }
 
 const greetingsByLang: Record<string, string[]> = {
@@ -61,10 +68,27 @@ function ts() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function toVoiceTranscript(text: string): string {
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/[ðŸ][^\s]*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const Conversation = () => {
   const { level, learningLanguage, incrementConversations, addXP } = useProgress();
   const { canAfford, spendCredits } = useCredits();
   const audio = useGameAudio();
+  const { settings } = useVoiceSettings();
+  const voiceLanguage = getVoiceLanguage(learningLanguage);
+  const voice = useVoiceSynthesis({
+    language: voiceLanguage,
+    mode: "chat",
+    settings,
+  });
+  const recognition = useVoiceRecognition({ language: voiceLanguage });
   const [input, setInput] = useState("");
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,8 +103,8 @@ const Conversation = () => {
   const hasCountedConvo = useRef(false);
   const langInfo = languageLabels[learningLanguage];
 
-  const addMessage = useCallback((text: string, isUser: boolean) => {
-    setMessages((m) => [...m, { text, isUser, timestamp: ts() }]);
+  const addMessage = useCallback((text: string, isUser: boolean, transcript = toVoiceTranscript(text)) => {
+    setMessages((m) => [...m, { text, isUser, timestamp: ts(), transcript }]);
   }, []);
 
   const getCorrectRate = useCallback(() => {
@@ -123,6 +147,12 @@ const Conversation = () => {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (recognition.transcript) {
+      setInput(recognition.transcript);
+    }
+  }, [recognition.transcript]);
 
   const send = () => {
     if (!input.trim() || answered || !currentPrompt) return;
@@ -236,7 +266,15 @@ const Conversation = () => {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-1 pr-1">
         {messages.map((msg, i) => (
-          <ChatBubble key={i} message={msg.text} isUser={msg.isUser} timestamp={msg.timestamp} />
+          <ChatBubble
+            key={i}
+            message={msg.text}
+            isUser={msg.isUser}
+            timestamp={msg.timestamp}
+            transcript={msg.transcript}
+            isSpeaking={voice.isSpeaking}
+            onSpeak={() => voice.speak(msg.transcript || toVoiceTranscript(msg.text))}
+          />
         ))}
         <div ref={scrollRef} />
       </div>
@@ -252,6 +290,12 @@ const Conversation = () => {
           </Button>
         )}
         <div className="flex gap-2">
+          <MicButton
+            isListening={recognition.isListening}
+            onStart={recognition.start}
+            onStop={recognition.stop}
+            disabled={answered}
+          />
           <Button
             onClick={giveHint}
             disabled={showHint || answered}
@@ -283,6 +327,12 @@ const Conversation = () => {
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        <VoiceTranscript transcript={recognition.transcript} label="Voice transcript" />
+        {(recognition.error || voice.error) && (
+          <p className="text-xs text-destructive text-center">
+            {recognition.error || voice.error}
+          </p>
+        )}
         {!answered && currentPrompt && total >= 1 && (
           <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
             <Sparkles className="h-3 w-3" />
