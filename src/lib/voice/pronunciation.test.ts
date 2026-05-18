@@ -6,6 +6,10 @@ describe("pronunciation feedback", () => {
     expect(normalizeSpeechText(" Bonjour, DAVID! ")).toBe("bonjour david");
   });
 
+  it("removes Arabic diacritics without splitting letters", () => {
+    expect(normalizeSpeechText("مَرْحَبًا")).toBe("مرحبا");
+  });
+
   it("scores exact spoken answers highly", () => {
     const feedback = buildPronunciationFeedback("Bonjour", "bonjour");
     expect(feedback.score).toBe(100);
