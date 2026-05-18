@@ -1,13 +1,19 @@
 # Interglott AI Voice Assistant Design
 
 Date: 2026-05-18
-Status: Approved direction, implementation planning next
+Status: Revised for Realtime AI provider support, implementation planning next
 
 ## Approved Starting Slice
 
 Build the **Hybrid Foundation** approach with **Lessons + Chat Shell** as the first product slice.
 
-The first version should make voice feel present and useful without requiring a full AI speech backend on day one. It will use reusable voice UI, state hooks, and provider adapters. The default adapter can use browser-native speech APIs where available, while the architecture remains ready for a later backend provider for high-quality text-to-speech, speech-to-text, conversational AI, and pronunciation scoring.
+The voice system must not be browser-native only. Browser speech APIs are acceptable only as a degraded fallback or local development convenience. The production architecture should treat Realtime AI providers as first-class adapters, especially OpenAI Realtime and Gemini Live.
+
+The first version should make voice feel present and useful while preparing for real low-latency speech-to-speech interactions. It will use reusable voice UI, state hooks, and provider adapters. The system should support:
+
+- OpenAI Realtime API for speech-to-speech tutor interactions.
+- Gemini Live API for realtime voice interactions.
+- A browser-native fallback for unsupported environments or development without provider keys.
 
 ## Product Goals
 
@@ -21,6 +27,7 @@ Initial goals:
 - Show both audio controls and visible text transcription in chat.
 - Provide lightweight pronunciation feedback and a score in the first version.
 - Keep all voice logic reusable for stories, TCF/TEF, and richer AI voice mode later.
+- Keep provider keys off the client by using a backend token/session endpoint.
 
 ## First Surfaces
 
@@ -56,16 +63,17 @@ Add shared voice controls to the existing tutor chat:
 - Chat bubbles should preserve text transcription beneath or inside the audio interaction, so the learner can read what was spoken.
 - Typed input remains available as fallback.
 
-The first version should not require true streaming conversation. It should feel responsive, but can work turn-by-turn: AI prompt text is spoken, user records a response, transcript is evaluated, feedback is shown.
+The first version can work turn-by-turn in lessons, but chat should be architected for realtime provider sessions. If provider credentials are configured, AI Chat should use realtime audio input/output. If not, it should fall back to the non-streaming/browser-native mode while preserving the same UI.
 
 ## Voice Architecture
 
 Create a small reusable voice layer:
 
 - `VoiceProvider` or hook-level state for global settings.
-- `useSpeechSynthesis` for text-to-speech playback.
-- `useSpeechRecognition` for microphone capture and transcript state.
-- `usePronunciationFeedback` for lightweight local scoring and future provider scoring.
+- `useVoiceSession` for provider-backed realtime sessions.
+- `useSpeechSynthesis` for text-to-speech playback through the active provider or fallback.
+- `useSpeechRecognition` for microphone capture, transcript state, and fallback recognition.
+- `usePronunciationFeedback` for provider scoring, heuristic fallback scoring, and future phoneme-level feedback.
 - Reusable components:
   - `VoiceButton`
   - `MicButton`
@@ -76,9 +84,55 @@ Create a small reusable voice layer:
 
 Provider abstraction:
 
-- Browser adapter for initial implementation.
-- Future AI adapter for backend TTS/STT/scoring.
+- OpenAI Realtime adapter for speech-to-speech sessions.
+- Gemini Live adapter for realtime voice sessions.
+- Browser adapter as fallback only.
 - Shared interface should hide provider differences from lessons and chat.
+- Provider choice should be configurable without rewriting UI surfaces.
+
+## Realtime Provider Strategy
+
+### OpenAI Realtime
+
+OpenAI Realtime should be a first-class provider for conversational voice mode. Current OpenAI docs describe the Realtime API as supporting low-latency multimodal experiences with native speech-to-speech, audio/text inputs, and audio/text outputs. For browser clients, OpenAI recommends WebRTC for consistent performance and ephemeral/session credentials rather than exposing a standard API key in the client.
+
+Reference docs:
+
+- https://platform.openai.com/docs/guides/realtime/overview
+- https://platform.openai.com/docs/guides/realtime-webrtc
+
+Implementation implications:
+
+- Add a backend endpoint or Supabase Edge Function that creates OpenAI realtime sessions/client secrets.
+- The React client should connect through WebRTC for browser voice mode.
+- Data channel events should provide transcript, response state, and tutor control events.
+- API keys must stay server-side.
+
+### Gemini Live
+
+Gemini Live should also be a first-class provider option. Current Google AI docs describe the Gemini Live API as supporting low-latency realtime voice/video interactions, continuous audio/video/text streams, voice activity detection, session management, tool use/function calling, and ephemeral tokens for secure client-side authentication.
+
+Reference docs:
+
+- https://ai.google.dev/gemini-api/docs/live
+- https://ai.google.dev/gemini-api/docs/live-guide
+
+Implementation implications:
+
+- Add a backend endpoint or Supabase Edge Function that mints Gemini Live ephemeral tokens or proxies session creation.
+- The provider adapter should support WebRTC or WebSocket depending on SDK/runtime fit.
+- Gemini-specific voice configuration should be isolated inside the adapter.
+- API keys must stay server-side.
+
+### Provider Selection
+
+Provider order should be:
+
+1. Configured realtime provider: OpenAI Realtime or Gemini Live.
+2. Non-realtime cloud TTS/STT/scoring adapter if added later.
+3. Browser-native fallback.
+
+The UI should show provider availability in a developer-friendly way during early builds, but end users should only see clear fallback messages.
 
 Suggested interface shape:
 
@@ -90,6 +144,13 @@ interface SpeechSynthesisRequest {
   language: VoiceLanguage;
   rate: number;
   voiceGender: "female" | "male";
+}
+
+interface RealtimeVoiceSessionConfig {
+  provider: "openai-realtime" | "gemini-live" | "browser-fallback";
+  language: VoiceLanguage;
+  level: "beginner" | "intermediate" | "advanced";
+  tutorInstructions: string;
 }
 
 interface SpeechRecognitionResult {
@@ -132,6 +193,20 @@ Add user-facing voice settings:
 
 Settings should persist locally with the existing localStorage-based user progress model.
 
+## Backend and Secrets
+
+The current app is a Vite frontend with Supabase integration. Realtime providers require a secure backend boundary before production use.
+
+Recommended backend path:
+
+- Use Supabase Edge Functions for provider session/token creation.
+- Store provider API keys in Supabase secrets, not in `VITE_*` variables.
+- Expose a narrow endpoint such as `/voice/session` that returns only short-lived ephemeral credentials or session metadata.
+- Include provider, language, learner level, and requested mode in the session request.
+- Keep lesson and chat UI provider-agnostic.
+
+Local development can use a browser fallback when no backend provider is configured.
+
 ## Gamification
 
 Integrate speaking practice with the existing XP and achievements model:
@@ -164,7 +239,7 @@ Test the first implementation with:
 - Manual browser verification on `/lessons/:id` and `/conversation`.
 - Mobile viewport review for control spacing and text wrapping.
 
-Browser speech APIs can be difficult to automate, so verification should include controlled manual checks and mockable voice adapters.
+Realtime speech APIs and browser speech APIs can be difficult to automate, so verification should include controlled manual checks and mockable voice adapters.
 
 ## Future Phases
 
@@ -176,7 +251,6 @@ Phase 2:
 
 Phase 3:
 
-- Add backend AI speech provider.
-- Add high-quality native voices.
-- Add true pronunciation analysis and phoneme-level feedback.
-- Add real-time conversational voice mode with streaming if latency is acceptable.
+- Add deeper pronunciation analysis and phoneme-level feedback.
+- Add provider comparison and switching in admin/dev configuration.
+- Add real-time conversational voice mode refinements such as interruption handling, barge-in, and lower-latency turn detection.
