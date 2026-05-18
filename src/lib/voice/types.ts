@@ -43,4 +43,5 @@ export interface RealtimeVoiceSessionConfig {
   level: "beginner" | "intermediate" | "advanced";
   mode: VoiceMode;
   tutorInstructions: string;
+  voiceGender?: VoiceGender;
 }

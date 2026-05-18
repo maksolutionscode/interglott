@@ -28,6 +28,16 @@ vi.mock("@/hooks/useVoiceRecognition", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useRealtimeConversationVoice", () => ({
+  useRealtimeConversationVoice: () => ({
+    error: null,
+    isActive: false,
+    isConnecting: false,
+    start: vi.fn(),
+    stop: vi.fn(),
+  }),
+}));
+
 function renderConversation() {
   localStorage.clear();
   return render(

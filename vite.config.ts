@@ -5,18 +5,6 @@ import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(({ mode }) => ({
-  define: {
-    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(
-      process.env.VITE_SUPABASE_URL || "https://jldqdxahwqaftxgnvjeh.supabase.co"
-    ),
-    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(
-      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsZHFkeGFod3FhZnR4Z252amVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODgxNzQsImV4cCI6MjA4ODU2NDE3NH0.XArYPPu4BjTXYYUGTo0MpakYtalLoDqNwMlk4HHSZ84"
-    ),
-    "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(
-      process.env.VITE_SUPABASE_PROJECT_ID || "jldqdxahwqaftxgnvjeh"
-    ),
-  },
   server: {
     host: "::",
     port: 8080,
@@ -30,6 +18,9 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
+      devOptions: {
+        enabled: true,
+      },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],

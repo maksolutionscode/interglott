@@ -3,24 +3,21 @@ import { getLessonByIdForLanguage } from "@/data/lessonsByLanguage";
 import { useProgress } from "@/contexts/UserProgressContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useGameAudio } from "@/hooks/useGameAudio";
-import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceSettings } from "@/hooks/useVoiceSettings";
 import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { calculateXP } from "@/lib/gamification";
-import { buildPronunciationFeedback, normalizeSpeechText } from "@/lib/voice/pronunciation";
+import { buildPronunciationFeedback } from "@/lib/voice/pronunciation";
 import { getVoiceLanguage } from "@/lib/voice/language";
 import type { PronunciationFeedback } from "@/lib/voice/types";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Check, X, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { OutOfCreditsModal } from "@/components/OutOfCreditsModal";
-import { MicButton } from "@/components/voice/MicButton";
 import { PronunciationFeedbackCard } from "@/components/voice/PronunciationFeedbackCard";
 import { VoiceButton } from "@/components/voice/VoiceButton";
-import { VoiceTranscript } from "@/components/voice/VoiceTranscript";
 
 const LessonDetail = () => {
   const { id } = useParams();
@@ -29,14 +26,18 @@ const LessonDetail = () => {
   const { canAfford, spendCredits } = useCredits();
   const audio = useGameAudio();
   const { settings } = useVoiceSettings();
+  const lesson = getLessonByIdForLanguage(learningLanguage, id || "");
   const voiceLanguage = getVoiceLanguage(learningLanguage);
   const voice = useVoiceSynthesis({
     language: voiceLanguage,
     mode: "lesson",
     settings,
+    realtimeConfig: {
+      learningLanguage,
+      level: lesson?.level ?? "beginner",
+      tutorInstructions: `Pronounce each lesson option naturally and clearly in ${voiceLanguage}. Only say the provided option text.`,
+    },
   });
-  const recognition = useVoiceRecognition({ language: voiceLanguage });
-  const lesson = getLessonByIdForLanguage(learningLanguage, id || "");
 
   const [currentEx, setCurrentEx] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -47,38 +48,10 @@ const LessonDetail = () => {
   const [finished, setFinished] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [creditsDeducted, setCreditsDeducted] = useState(false);
-  const [spokenTranscript, setSpokenTranscript] = useState("");
-  const [voicePrompt, setVoicePrompt] = useState<string | null>(null);
   const [pronunciationFeedback, setPronunciationFeedback] = useState<PronunciationFeedback | null>(null);
+  const [activeVoiceTarget, setActiveVoiceTarget] = useState<string | null>(null);
   const exercise = lesson?.exercises[currentEx];
   const backUrl = lesson ? `/lessons?level=${lesson.level}` : "/lessons";
-
-  useEffect(() => {
-    if (!exercise || !recognition.transcript) return;
-
-    const transcript = recognition.transcript.trim();
-    setSpokenTranscript(transcript);
-    setVoicePrompt(null);
-
-    if (exercise.type === "fill-blank") {
-      setInputVal(transcript);
-      return;
-    }
-
-    if (exercise.type === "multiple-choice" && exercise.options) {
-      const spokenAnswer = normalizeSpeechText(transcript);
-      const matchingOption = exercise.options.find(
-        (option) => normalizeSpeechText(option) === spokenAnswer
-      );
-
-      if (matchingOption) {
-        setSelected(matchingOption);
-        return;
-      }
-
-      setVoicePrompt("I heard you, but could not match that to an option. Please try again.");
-    }
-  }, [exercise, recognition.transcript]);
 
   if (!lesson || !exercise) {
     return (
@@ -90,6 +63,17 @@ const LessonDetail = () => {
   }
 
   const isAlreadyCompleted = completedLessons.includes(lesson.id);
+
+  const speakText = async (target: string, text: string) => {
+    setActiveVoiceTarget(target);
+    try {
+      await voice.speak(text);
+    } finally {
+      setActiveVoiceTarget((currentTarget) =>
+        currentTarget === target ? null : currentTarget
+      );
+    }
+  };
 
   const checkAnswer = () => {
     // Deduct credits on first answer
@@ -106,8 +90,8 @@ const LessonDetail = () => {
     setCorrect(isCorrect);
     setAnswered(true);
     setPronunciationFeedback(
-      spokenTranscript
-        ? buildPronunciationFeedback(exercise.correctAnswer, spokenTranscript)
+      exercise.type === "fill-blank" && inputVal.trim()
+        ? buildPronunciationFeedback(exercise.correctAnswer, inputVal.trim())
         : null
     );
     if (isCorrect) {
@@ -124,9 +108,8 @@ const LessonDetail = () => {
       setSelected(null);
       setInputVal("");
       setAnswered(false);
-      setSpokenTranscript("");
-      setVoicePrompt(null);
       setPronunciationFeedback(null);
+      setActiveVoiceTarget(null);
     } else {
       setFinished(true);
       audio.onLessonComplete();
@@ -196,13 +179,7 @@ const LessonDetail = () => {
           exit={{ opacity: 0, x: -30 }}
           className="glass-card rounded-2xl p-6 space-y-5"
         >
-          <div className="flex items-start gap-3">
-            <p className="flex-1 font-display font-semibold text-foreground text-lg">{exercise.question}</p>
-            <VoiceButton
-              isSpeaking={voice.isSpeaking}
-              onSpeak={() => voice.speak(exercise.question)}
-            />
-          </div>
+          <p className="font-display font-semibold text-foreground text-lg">{exercise.question}</p>
 
           {exercise.type === "multiple-choice" && exercise.options && (
             <div className="space-y-2">
@@ -226,8 +203,8 @@ const LessonDetail = () => {
                     </div>
                   </button>
                   <VoiceButton
-                    isSpeaking={voice.isSpeaking}
-                    onSpeak={() => voice.speak(opt)}
+                    isSpeaking={voice.isSpeaking && activeVoiceTarget === `option-${exercise.id}-${opt}`}
+                    onSpeak={() => void speakText(`option-${exercise.id}-${opt}`, opt)}
                     className="self-center"
                   />
                 </div>
@@ -250,42 +227,10 @@ const LessonDetail = () => {
                 onKeyDown={(e) => e.key === "Enter" && !answered && (exercise.type === "fill-blank" ? inputVal.trim() : selected) && checkAnswer()}
               />
               {answered && !correct && (
-                <div className="flex items-center gap-2 text-sm text-success">
-                  <span>Correct answer: {exercise.correctAnswer}</span>
-                  <VoiceButton
-                    isSpeaking={voice.isSpeaking}
-                    onSpeak={() => voice.speak(exercise.correctAnswer)}
-                    replay
-                  />
-                </div>
+                <p className="text-sm text-success">Correct answer: {exercise.correctAnswer}</p>
               )}
             </div>
           )}
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-secondary/30 p-3">
-              <MicButton
-                isListening={recognition.isListening}
-                onStart={recognition.start}
-                onStop={recognition.stop}
-                disabled={answered}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  {recognition.isListening ? "Listening..." : "Answer by voice"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Speak the option or answer out loud.
-                </p>
-              </div>
-            </div>
-            <VoiceTranscript transcript={spokenTranscript} label="You said" />
-            {(recognition.error || voicePrompt || voice.error) && (
-              <p className="text-xs text-destructive">
-                {recognition.error || voicePrompt || voice.error}
-              </p>
-            )}
-          </div>
 
           {exercise.hint && !answered && (
             <p className="text-xs text-muted-foreground italic">💡 Hint: {exercise.hint}</p>

@@ -1,16 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreditsProvider } from "@/contexts/CreditsContext";
 import { UserProgressProvider } from "@/contexts/UserProgressContext";
 import LessonDetail from "./LessonDetail";
 
+const speakMock = vi.fn(() => new Promise(() => {}));
+
 vi.mock("@/hooks/useVoiceSynthesis", () => ({
   useVoiceSynthesis: () => ({
-    speak: vi.fn(),
+    speak: speakMock,
     stop: vi.fn(),
-    isSpeaking: false,
+    isSpeaking: true,
     error: null,
   }),
 }));
@@ -42,15 +44,30 @@ function renderLesson(id = "greetings") {
 }
 
 describe("LessonDetail voice controls", () => {
-  it("renders speaker controls for the question and answer options", () => {
-    renderLesson();
-
-    expect(screen.getAllByRole("button", { name: /play pronunciation/i }).length).toBeGreaterThan(1);
+  beforeEach(() => {
+    speakMock.mockClear();
   });
 
-  it("renders a microphone control for spoken answers", () => {
+  it("renders speaker controls only for multiple-choice options", () => {
     renderLesson();
 
-    expect(screen.getByRole("button", { name: /start speaking/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /play pronunciation/i })).toHaveLength(4);
+  });
+
+  it("does not render a microphone control in the lesson question card", () => {
+    renderLesson();
+
+    expect(screen.queryByRole("button", { name: /start speaking/i })).not.toBeInTheDocument();
+  });
+
+  it("only highlights the clicked speaker control", () => {
+    renderLesson();
+
+    const buttons = screen.getAllByRole("button", { name: /play pronunciation/i });
+    fireEvent.click(buttons[1]);
+
+    expect(buttons[1].className).toContain("glow-accent");
+    expect(buttons[0].className).not.toContain("glow-accent");
+    expect(buttons[2].className).not.toContain("glow-accent");
   });
 });

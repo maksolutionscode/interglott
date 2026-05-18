@@ -1,18 +1,30 @@
 import { useCallback, useState } from "react";
 
 import { speakWithBrowser } from "@/lib/voice/browserVoiceAdapter";
-import type { VoiceLanguage, VoiceMode, VoiceRequest, VoiceSettings } from "@/lib/voice/types";
+import { speakWithOpenAiRealtime } from "@/lib/voice/openAiRealtimePlayback";
+import type {
+  RealtimeVoiceSessionConfig,
+  VoiceLanguage,
+  VoiceMode,
+  VoiceRequest,
+  VoiceSettings,
+} from "@/lib/voice/types";
 
 interface UseVoiceSynthesisOptions {
   language: VoiceLanguage;
   mode: VoiceMode;
   settings: VoiceSettings;
+  realtimeConfig?: Omit<
+    RealtimeVoiceSessionConfig,
+    "provider" | "language" | "mode" | "voiceGender"
+  >;
 }
 
 export function useVoiceSynthesis({
   language,
   mode,
   settings,
+  realtimeConfig,
 }: UseVoiceSynthesisOptions) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,22 +34,44 @@ export function useVoiceSynthesis({
       setError(null);
       setIsSpeaking(true);
       try {
-        await speakWithBrowser(
-          {
-            text,
-            language,
-            mode,
-            ...options,
-          },
-          settings
-        );
+        const request = {
+          text,
+          language,
+          mode,
+          ...options,
+        };
+
+        if (settings.provider === "openai-realtime" && realtimeConfig) {
+          try {
+            console.log("Attempting realtime playback with OpenAI...", {
+              request,
+              sessionConfig: realtimeConfig,
+              voiceGender: settings.voiceGender,
+            });
+            await speakWithOpenAiRealtime({
+              request,
+              sessionConfig: realtimeConfig,
+              voiceGender: settings.voiceGender,
+            });
+            return;
+          } catch (realtimeError) {
+            setError(
+              realtimeError instanceof Error
+                ? realtimeError.message
+                : "Realtime voice playback failed."
+            );
+          }
+        }
+
+        await speakWithBrowser(request, settings);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Voice playback failed.");
       } finally {
         setIsSpeaking(false);
       }
     },
-    [language, mode, settings]
+    [language, mode, realtimeConfig, settings]
   );
 
   const stop = useCallback(() => {

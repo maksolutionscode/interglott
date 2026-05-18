@@ -4,6 +4,7 @@ import { useProgress } from "@/contexts/UserProgressContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useGameAudio } from "@/hooks/useGameAudio";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useRealtimeConversationVoice } from "@/hooks/useRealtimeConversationVoice";
 import { useVoiceSettings } from "@/hooks/useVoiceSettings";
 import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { Input } from "@/components/ui/input";
@@ -82,11 +83,22 @@ const Conversation = () => {
   const { canAfford, spendCredits } = useCredits();
   const audio = useGameAudio();
   const { settings } = useVoiceSettings();
+  const langInfo = languageLabels[learningLanguage];
   const voiceLanguage = getVoiceLanguage(learningLanguage);
+  const usesRealtimeVoice = settings.provider === "openai-realtime";
   const voice = useVoiceSynthesis({
     language: voiceLanguage,
     mode: "chat",
     settings,
+    realtimeConfig: {
+      learningLanguage,
+      level,
+      tutorInstructions: `
+      Speak naturally in ${langInfo.name}.
+      Ignore non-spoken elements such as emojis, symbols, flags, formatting marks, and decorative characters.
+      Only pronounce the actual readable language content exactly as written.
+      `,
+    },
   });
   const recognition = useVoiceRecognition({ language: voiceLanguage });
   const [input, setInput] = useState("");
@@ -98,20 +110,64 @@ const Conversation = () => {
   const [score, setScore] = useState(0);
   const [total, setTotal] = useState(0);
   const [recentCorrect, setRecentCorrect] = useState<boolean[]>([]);
+  const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
   const usedIds = useRef(new Set<string>());
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasCountedConvo = useRef(false);
-  const langInfo = languageLabels[learningLanguage];
+  const timeoutRefs = useRef<number[]>([]);
+
+  const scheduleTimeout = useCallback((callback: () => void, delay: number) => {
+    const timeoutId = window.setTimeout(() => {
+      timeoutRefs.current = timeoutRefs.current.filter((id) => id !== timeoutId);
+      callback();
+    }, delay);
+    timeoutRefs.current.push(timeoutId);
+  }, []);
 
   const addMessage = useCallback((text: string, isUser: boolean, transcript = toVoiceTranscript(text)) => {
     setMessages((m) => [...m, { text, isUser, timestamp: ts(), transcript }]);
   }, []);
+
+  const speakMessage = async (messageId: string, text: string) => {
+    setActiveVoiceMessageId(messageId);
+    try {
+      console.log("Speaking message:", text);
+      await voice.speak(text);
+    } finally {
+      setActiveVoiceMessageId((currentMessageId) =>
+        currentMessageId === messageId ? null : currentMessageId
+      );
+    }
+  };
 
   const getCorrectRate = useCallback(() => {
     if (recentCorrect.length === 0) return 0.5;
     const correct = recentCorrect.filter((c) => c).length;
     return correct / recentCorrect.length;
   }, [recentCorrect]);
+
+  const realtimeVoice = useRealtimeConversationVoice({
+    enabled: usesRealtimeVoice,
+    config: {
+      provider: settings.provider,
+      language: voiceLanguage,
+      learningLanguage,
+      level,
+      mode: "chat",
+      tutorInstructions: `You are Interglott's voice tutor for ${langInfo.name}. Speak mainly in ${langInfo.name}, keep responses short, natural, and encouraging for a ${level} learner, and gently correct mistakes when useful.`,
+      voiceGender: settings.voiceGender,
+    },
+    onUserTranscript: (transcript) => {
+      if (!hasCountedConvo.current) {
+        incrementConversations();
+        hasCountedConvo.current = true;
+      }
+      addMessage(transcript, true, transcript);
+    },
+    onAssistantTranscript: (transcript) => {
+      addMessage(transcript, false, transcript);
+    },
+  });
 
   const nextPrompt = useCallback(() => {
     if (!canAfford("conversation")) {
@@ -140,8 +196,15 @@ const Conversation = () => {
     const greetings = greetingsByLang[learningLanguage];
     const greeting = greetings[Math.floor(Math.random() * greetings.length)];
     addMessage(greeting, false);
-    setTimeout(() => nextPrompt(), 300);
+    scheduleTimeout(() => nextPrompt(), 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      timeoutRefs.current = [];
+    };
   }, []);
 
   useEffect(() => {
@@ -149,10 +212,10 @@ const Conversation = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (recognition.transcript) {
+    if (!usesRealtimeVoice && recognition.transcript) {
       setInput(recognition.transcript);
     }
-  }, [recognition.transcript]);
+  }, [recognition.transcript, usesRealtimeVoice]);
 
   const send = () => {
     if (!input.trim() || answered || !currentPrompt) return;
@@ -178,12 +241,12 @@ const Conversation = () => {
       setScore((s) => s + 1);
       addXP(15);
       audio.onCorrectAnswer();
-      setTimeout(() => audio.onXPReward(), 300);
+      scheduleTimeout(() => audio.onXPReward(), 300);
     } else if (result.isClose) {
       setScore((s) => s + 0.5);
       addXP(5);
       audio.onIncorrectAnswer();
-      setTimeout(() => audio.onXPReward(), 300);
+      scheduleTimeout(() => audio.onXPReward(), 300);
     } else {
       audio.onIncorrectAnswer();
     }
@@ -191,7 +254,7 @@ const Conversation = () => {
     const feedback = buildFeedback(result, currentPrompt);
     setAnswered(true);
 
-    setTimeout(() => addMessage(feedback, false), 400);
+    scheduleTimeout(() => addMessage(feedback, false), 400);
   };
 
   const handleNext = () => nextPrompt();
@@ -204,6 +267,7 @@ const Conversation = () => {
   };
 
   const resetSession = () => {
+    realtimeVoice.stop();
     usedIds.current.clear();
     setMessages([]);
     setScore(0);
@@ -212,11 +276,12 @@ const Conversation = () => {
     setAnswered(false);
     setShowHint(false);
     setCurrentPrompt(null);
+    setActiveVoiceMessageId(null);
     hasCountedConvo.current = false;
     const greetings = greetingsByLang[learningLanguage];
     const greeting = greetings[Math.floor(Math.random() * greetings.length)];
     addMessage(greeting, false);
-    setTimeout(() => nextPrompt(), 300);
+    scheduleTimeout(() => nextPrompt(), 300);
   };
 
   const correctRate = getCorrectRate();
@@ -272,8 +337,8 @@ const Conversation = () => {
             isUser={msg.isUser}
             timestamp={msg.timestamp}
             transcript={msg.transcript}
-            isSpeaking={voice.isSpeaking}
-            onSpeak={() => voice.speak(msg.transcript || toVoiceTranscript(msg.text))}
+            isSpeaking={voice.isSpeaking && activeVoiceMessageId === `message-${i}`}
+            onSpeak={() => void speakMessage(`message-${i}`, msg.transcript || toVoiceTranscript(msg.text))}
           />
         ))}
         <div ref={scrollRef} />
@@ -291,9 +356,13 @@ const Conversation = () => {
         )}
         <div className="flex gap-2">
           <MicButton
-            isListening={recognition.isListening}
-            onStart={recognition.start}
-            onStop={recognition.stop}
+            isListening={
+              usesRealtimeVoice
+                ? realtimeVoice.isActive || realtimeVoice.isConnecting
+                : recognition.isListening
+            }
+            onStart={usesRealtimeVoice ? () => void realtimeVoice.start() : recognition.start}
+            onStop={usesRealtimeVoice ? realtimeVoice.stop : recognition.stop}
             disabled={answered}
           />
           <Button
@@ -327,10 +396,21 @@ const Conversation = () => {
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <VoiceTranscript transcript={recognition.transcript} label="Voice transcript" />
-        {(recognition.error || voice.error) && (
+        {!usesRealtimeVoice && (
+          <VoiceTranscript transcript={recognition.transcript} label="Voice transcript" />
+        )}
+        {usesRealtimeVoice && (
+          <p className="text-xs text-muted-foreground text-center">
+            {realtimeVoice.isConnecting
+              ? "Connecting live voice..."
+              : realtimeVoice.isActive
+                ? "Live voice chat is active."
+                : "Start live voice chat with OpenAI Realtime."}
+          </p>
+        )}
+        {(recognition.error || voice.error || realtimeVoice.error) && (
           <p className="text-xs text-destructive text-center">
-            {recognition.error || voice.error}
+            {recognition.error || voice.error || realtimeVoice.error}
           </p>
         )}
         {!answered && currentPrompt && total >= 1 && (
