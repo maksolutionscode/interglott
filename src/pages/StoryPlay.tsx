@@ -3,11 +3,16 @@ import { getStoryById } from "@/data/stories";
 import { useProgress } from "@/contexts/UserProgressContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useGameAudio } from "@/hooks/useGameAudio";
+import { useVoiceSettings } from "@/hooks/useVoiceSettings";
+import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, CheckCircle2, XCircle, Star, Zap } from "lucide-react";
 import { OutOfCreditsModal } from "@/components/OutOfCreditsModal";
+import { VoiceButton } from "@/components/voice/VoiceButton";
+import { getVoiceLanguage } from "@/lib/voice/language";
+import { applyPersonaInstructions } from "@/lib/voice/voiceCatalog";
 
 const StoryPlay = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,8 +20,23 @@ const StoryPlay = () => {
   const { addXP, completeStory, completedStories } = useProgress();
   const { canAfford, spendCredits } = useCredits();
   const audio = useGameAudio();
+  const { settings } = useVoiceSettings();
 
   const story = getStoryById(id || "");
+  const storyVoiceLanguage = getVoiceLanguage(story?.language ?? "french", { mode: "story" });
+  const voice = useVoiceSynthesis({
+    language: storyVoiceLanguage,
+    mode: "story",
+    settings,
+    realtimeConfig: {
+      learningLanguage: story?.language ?? "french",
+      level: story?.level ?? "beginner",
+      tutorInstructions: applyPersonaInstructions(
+        "Read the provided story text naturally and clearly. Keep the original language of the text and never translate it.",
+        settings.voicePersona,
+      ),
+    },
+  });
 
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -25,6 +45,21 @@ const StoryPlay = () => {
   const [isComplete, setIsComplete] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [creditsDeducted, setCreditsDeducted] = useState(false);
+  const [activeVoiceTarget, setActiveVoiceTarget] = useState<string | null>(null);
+
+  const speakText = useCallback(
+    async (target: string, text: string) => {
+      setActiveVoiceTarget(target);
+      try {
+        await voice.speak(text);
+      } finally {
+        setActiveVoiceTarget((currentTarget) =>
+          currentTarget === target ? null : currentTarget,
+        );
+      }
+    },
+    [voice],
+  );
 
   const handleSelectOption = useCallback((optionId: string) => {
     if (showFeedback) return;
@@ -64,6 +99,7 @@ const StoryPlay = () => {
       setCurrentStep((s) => s + 1);
       setSelectedOption(null);
       setShowFeedback(false);
+      setActiveVoiceTarget(null);
     } else {
       // Story complete
       setIsComplete(true);
@@ -196,8 +232,17 @@ const StoryPlay = () => {
               {step.characterAvatar}
             </div>
             <div className={cn("glass-card rounded-2xl px-4 py-3 max-w-[85%]", story.language === "arabic" ? "rounded-br-sm" : "rounded-bl-sm")}>
-              <p className={cn("text-xs text-accent font-medium mb-1", story.language === "arabic" && "text-right")}>{step.characterName}</p>
-              <p className={cn("text-sm text-foreground leading-relaxed", story.language === "arabic" && "text-right")}>{step.dialogue}</p>
+              <div className={cn("flex items-start gap-3", story.language === "arabic" && "flex-row-reverse")}>
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-xs text-accent font-medium mb-1", story.language === "arabic" && "text-right")}>{step.characterName}</p>
+                  <p className={cn("text-sm text-foreground leading-relaxed", story.language === "arabic" && "text-right")}>{step.dialogue}</p>
+                </div>
+                <VoiceButton
+                  isSpeaking={voice.isSpeaking && activeVoiceTarget === `dialogue-${step.id}`}
+                  onSpeak={() => void speakText(`dialogue-${step.id}`, step.dialogue)}
+                  className="shrink-0"
+                />
+              </div>
             </div>
           </motion.div>
         </AnimatePresence>
@@ -212,31 +257,40 @@ const StoryPlay = () => {
             const showResult = showFeedback && isSelected;
 
             return (
-              <motion.button
+              <motion.div
                 key={option.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 + i * 0.08 }}
-                onClick={() => handleSelectOption(option.id)}
-                disabled={showFeedback && !isSelected}
-                className={cn(
-                  "w-full text-left rounded-xl px-4 py-3 text-sm transition-all border",
-                  !showFeedback && "glass-card border-transparent hover:border-accent/30 hover:glow-purple",
-                  showFeedback && !isSelected && "glass-card border-transparent opacity-40",
-                  showResult && option.isCorrect && "border-success/50 bg-success/10",
-                  showResult && !option.isCorrect && "border-destructive/50 bg-destructive/10",
-                  story.language === "arabic" && "text-right"
-                )}
+                className="flex items-stretch gap-2"
               >
-                <div className={cn("flex items-start gap-2", story.language === "arabic" && "flex-row-reverse")}>
-                  {showResult && (
-                    option.isCorrect
-                      ? <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                      : <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                <button
+                  onClick={() => handleSelectOption(option.id)}
+                  disabled={showFeedback && !isSelected}
+                  className={cn(
+                    "w-full text-left rounded-xl px-4 py-3 text-sm transition-all border",
+                    !showFeedback && "glass-card border-transparent hover:border-accent/30 hover:glow-purple",
+                    showFeedback && !isSelected && "glass-card border-transparent opacity-40",
+                    showResult && option.isCorrect && "border-success/50 bg-success/10",
+                    showResult && !option.isCorrect && "border-destructive/50 bg-destructive/10",
+                    story.language === "arabic" && "text-right",
                   )}
-                  <span className="text-foreground">{option.text}</span>
-                </div>
-              </motion.button>
+                >
+                  <div className={cn("flex items-start gap-2", story.language === "arabic" && "flex-row-reverse")}>
+                    {showResult && (
+                      option.isCorrect
+                        ? <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                        : <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    )}
+                    <span className="text-foreground">{option.text}</span>
+                  </div>
+                </button>
+                <VoiceButton
+                  isSpeaking={voice.isSpeaking && activeVoiceTarget === `option-${option.id}`}
+                  onSpeak={() => void speakText(`option-${option.id}`, option.text)}
+                  className="self-center shrink-0"
+                />
+              </motion.div>
             );
           })}
         </div>

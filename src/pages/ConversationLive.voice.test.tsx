@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CreditsProvider } from "@/contexts/CreditsContext";
 import { UserProgressProvider } from "@/contexts/UserProgressContext";
-import Conversation from "./Conversation";
+import ConversationLive from "./ConversationLive";
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
 
@@ -14,19 +14,6 @@ vi.mock("@/hooks/useVoiceSynthesis", () => ({
     stop: vi.fn(),
     isSpeaking: false,
     error: null,
-  }),
-}));
-
-vi.mock("@/hooks/useVoiceRecognition", () => ({
-  useVoiceRecognition: () => ({
-    start: vi.fn(),
-    stop: vi.fn(),
-    clearCapture: vi.fn(),
-    isListening: false,
-    transcript: "",
-    confidence: undefined,
-    error: null,
-    completedCapture: null,
   }),
 }));
 
@@ -40,35 +27,24 @@ vi.mock("@/hooks/useRealtimeConversationVoice", () => ({
   }),
 }));
 
-function renderConversation() {
+function renderConversationLive() {
   localStorage.clear();
   return render(
     <UserProgressProvider>
       <CreditsProvider>
         <MemoryRouter>
-          <Conversation />
+          <ConversationLive />
         </MemoryRouter>
       </CreditsProvider>
-    </UserProgressProvider>
+    </UserProgressProvider>,
   );
 }
 
-describe("Conversation voice controls", () => {
-  it("renders a microphone control for spoken chat answers", () => {
-    renderConversation();
+describe("ConversationLive voice controls", () => {
+  it("renders a dedicated microphone control for live voice chat", () => {
+    renderConversationLive();
 
     expect(screen.getByRole("button", { name: /start speaking/i })).toBeInTheDocument();
-  });
-
-  it("renders a separate control for opening live voice chat", () => {
-    renderConversation();
-
-    expect(screen.getByRole("button", { name: /open live voice chat/i })).toBeInTheDocument();
-  });
-
-  it("renders speaker controls for tutor messages", () => {
-    renderConversation();
-
-    expect(screen.getAllByRole("button", { name: /play pronunciation/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /live voice chat/i })).toBeInTheDocument();
   });
 });

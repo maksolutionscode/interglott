@@ -19,11 +19,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { XPConversionModal } from "@/components/XPConversionModal";
 import { BackButton } from "@/components/BackButton";
+import { VoiceSettingsControls } from "@/components/voice/VoiceSettingsControls";
+import { useVoiceSettings } from "@/hooks/useVoiceSettings";
 
 const Profile = () => {
   const progress = useProgress();
   const { creditsRemaining, isPremium } = useCredits();
   const navigate = useNavigate();
+  const { settings: voiceSettings, updateSettings: updateVoiceSettings } = useVoiceSettings();
   const [showConversion, setShowConversion] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(() => {
     return localStorage.getItem("interglott-share-token");
@@ -330,6 +333,22 @@ const Profile = () => {
         <p className="text-xs text-muted-foreground mt-1.5">
           Audio feedback for correct answers, XP rewards, and milestones
         </p>
+      </div>
+
+      <div className="glass-card rounded-xl p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Volume2 className="h-4 w-4 text-primary" />
+          <div>
+            <h2 className="font-display font-semibold text-foreground">AI Voice Assistant</h2>
+            <p className="text-xs text-muted-foreground">
+              Set the tutor voice and persona once, then use it across lessons, stories, and chat.
+            </p>
+          </div>
+        </div>
+        <VoiceSettingsControls
+          settings={voiceSettings}
+          updateSettings={updateVoiceSettings}
+        />
       </div>
 
       {/* Achievements */}

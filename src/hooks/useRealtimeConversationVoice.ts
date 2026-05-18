@@ -12,11 +12,16 @@ type RealtimeServerEvent = {
   };
 };
 
+interface UserRealtimeTurn {
+  transcript: string;
+  audioUrl?: string;
+}
+
 interface UseRealtimeConversationVoiceOptions {
   config: RealtimeVoiceSessionConfig;
   enabled: boolean;
   onAssistantTranscript: (transcript: string) => void;
-  onUserTranscript: (transcript: string) => void;
+  onUserTranscript: (turn: UserRealtimeTurn) => void;
 }
 
 function canUseRealtimeBrowserApis() {
@@ -42,11 +47,19 @@ export function useRealtimeConversationVoice({
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeTurnRecorderRef = useRef<{
+    recorder: MediaRecorder;
+    stream: MediaStream;
+  } | null>(null);
+  const pendingTurnAudioRef = useRef<Promise<string | undefined>[]>([]);
 
   const stop = useCallback(() => {
     dataChannelRef.current?.close();
     dataChannelRef.current = null;
 
+    if (activeTurnRecorderRef.current?.recorder.state !== "inactive") {
+      activeTurnRecorderRef.current?.recorder.stop();
+    }
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
 
@@ -63,12 +76,71 @@ export function useRealtimeConversationVoice({
     setIsConnecting(false);
   }, []);
 
+  const startUserTurnRecording = useCallback(() => {
+    if (
+      typeof MediaRecorder === "undefined" ||
+      activeTurnRecorderRef.current ||
+      !localStreamRef.current
+    ) {
+      return;
+    }
+
+    const sourceTrack = localStreamRef.current.getAudioTracks()[0];
+    if (!sourceTrack) return;
+
+    const stream = new MediaStream([sourceTrack.clone()]);
+    const chunks: Blob[] = [];
+    let resolveAudio: (audioUrl?: string) => void = () => undefined;
+    const audioPromise = new Promise<string | undefined>((resolve) => {
+      resolveAudio = resolve;
+    });
+
+    pendingTurnAudioRef.current.push(audioPromise);
+
+    const recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+    recorder.onstop = () => {
+      const mimeType = recorder.mimeType || "audio/webm";
+      const audioBlob = chunks.length > 0 ? new Blob(chunks, { type: mimeType }) : undefined;
+      resolveAudio(audioBlob ? URL.createObjectURL(audioBlob) : undefined);
+      stream.getTracks().forEach((track) => track.stop());
+
+      if (activeTurnRecorderRef.current?.recorder === recorder) {
+        activeTurnRecorderRef.current = null;
+      }
+    };
+
+    activeTurnRecorderRef.current = { recorder, stream };
+    recorder.start();
+  }, []);
+
+  const stopUserTurnRecording = useCallback(() => {
+    const activeRecorder = activeTurnRecorderRef.current?.recorder;
+    if (activeRecorder && activeRecorder.state !== "inactive") {
+      activeRecorder.stop();
+    }
+  }, []);
+
   const handleServerEvent = useCallback(
-    (event: RealtimeServerEvent) => {
+    async (event: RealtimeServerEvent) => {
       switch (event.type) {
+        case "input_audio_buffer.speech_started":
+          startUserTurnRecording();
+          return;
+        case "input_audio_buffer.speech_stopped":
+          stopUserTurnRecording();
+          return;
         case "conversation.item.input_audio_transcription.completed":
           if (event.transcript?.trim()) {
-            onUserTranscript(event.transcript.trim());
+            const nextAudio = pendingTurnAudioRef.current.shift();
+            onUserTranscript({
+              transcript: event.transcript.trim(),
+              audioUrl: nextAudio ? await nextAudio : undefined,
+            });
           }
           return;
         case "response.output_audio_transcript.done":
@@ -88,7 +160,7 @@ export function useRealtimeConversationVoice({
           return;
       }
     },
-    [onAssistantTranscript, onUserTranscript]
+    [onAssistantTranscript, onUserTranscript, startUserTurnRecording, stopUserTurnRecording]
   );
 
   const start = useCallback(async () => {
@@ -136,12 +208,36 @@ export function useRealtimeConversationVoice({
       localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
 
       const dataChannel = peerConnection.createDataChannel("oai-events");
+      dataChannel.addEventListener("open", () => {
+        dataChannel.send(
+          JSON.stringify({
+            type: "session.update",
+            session: {
+              type: "realtime",
+              audio: {
+                input: {
+                  turn_detection: {
+                    type: "semantic_vad",
+                    eagerness: "low",
+                    create_response: true,
+                    interrupt_response: true,
+                  },
+                },
+              },
+            },
+          }),
+        );
+      });
       dataChannel.addEventListener("message", (event) => {
+        let payload: RealtimeServerEvent;
         try {
-          handleServerEvent(JSON.parse(event.data) as RealtimeServerEvent);
+          payload = JSON.parse(event.data) as RealtimeServerEvent;
         } catch {
           setError("Received an unreadable realtime event.");
+          return;
         }
+
+        void handleServerEvent(payload);
       });
 
       const offer = await peerConnection.createOffer();

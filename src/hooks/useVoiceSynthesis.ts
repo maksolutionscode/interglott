@@ -16,7 +16,7 @@ interface UseVoiceSynthesisOptions {
   settings: VoiceSettings;
   realtimeConfig?: Omit<
     RealtimeVoiceSessionConfig,
-    "provider" | "language" | "mode" | "voiceGender"
+    "provider" | "language" | "mode" | "voiceGender" | "voiceName" | "voicePersona"
   >;
 }
 
@@ -43,15 +43,17 @@ export function useVoiceSynthesis({
 
         if (settings.provider === "openai-realtime" && realtimeConfig) {
           try {
-            console.log("Attempting realtime playback with OpenAI...", {
-              request,
-              sessionConfig: realtimeConfig,
-              voiceGender: settings.voiceGender,
-            });
+            // console.log("Attempting realtime playback with OpenAI...", {
+            //   request,
+            //   sessionConfig: realtimeConfig,
+            //   voiceGender: settings.voiceGender,
+            // });
             await speakWithOpenAiRealtime({
               request,
               sessionConfig: realtimeConfig,
               voiceGender: settings.voiceGender,
+              voiceName: settings.voiceName,
+              voicePersona: settings.voicePersona,
             });
             return;
           } catch (realtimeError) {

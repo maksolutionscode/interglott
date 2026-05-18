@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getVoiceLanguage, getProviderPreference } from "./language";
+import { getProviderPreference, getVoiceLanguage, getVoiceLanguageForText } from "./language";
 
 describe("voice language mapping", () => {
   it("maps learning languages to native speech locales", () => {
@@ -12,6 +12,15 @@ describe("voice language mapping", () => {
 
   it("treats TCF/TEF as French speech", () => {
     expect(getVoiceLanguage("french", { mode: "tcf-tef" })).toBe("fr-FR");
+  });
+
+  it("detects obvious English text even when the learning language is different", () => {
+    expect(getVoiceLanguageForText("Hello, how are you doing?", "fr-FR")).toBe("en-US");
+  });
+
+  it("keeps Arabic and Chinese text on their native locales", () => {
+    expect(getVoiceLanguageForText("مرحبا كيف حالك", "en-US")).toBe("ar-SA");
+    expect(getVoiceLanguageForText("你好，你怎么样？", "en-US")).toBe("zh-CN");
   });
 
   it("prefers configured realtime providers before browser fallback", () => {

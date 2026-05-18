@@ -7,8 +7,9 @@ import { useVoiceSettings } from "@/hooks/useVoiceSettings";
 import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { calculateXP } from "@/lib/gamification";
 import { buildPronunciationFeedback } from "@/lib/voice/pronunciation";
-import { getVoiceLanguage } from "@/lib/voice/language";
+import { getVoiceLanguage, getVoiceLanguageForText } from "@/lib/voice/language";
 import type { PronunciationFeedback } from "@/lib/voice/types";
+import { applyPersonaInstructions } from "@/lib/voice/voiceCatalog";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,10 @@ const LessonDetail = () => {
     realtimeConfig: {
       learningLanguage,
       level: lesson?.level ?? "beginner",
-      tutorInstructions: `Pronounce each lesson option naturally and clearly in ${voiceLanguage}. Only say the provided option text.`,
+      tutorInstructions: applyPersonaInstructions(
+        "Pronounce each lesson option naturally and clearly. Only say the provided option text, keep its original language, and never translate it.",
+        settings.voicePersona,
+      ),
     },
   });
 
@@ -64,10 +68,10 @@ const LessonDetail = () => {
 
   const isAlreadyCompleted = completedLessons.includes(lesson.id);
 
-  const speakText = async (target: string, text: string) => {
+  const speakText = async (target: string, text: string, language = voiceLanguage) => {
     setActiveVoiceTarget(target);
     try {
-      await voice.speak(text);
+      await voice.speak(text, { language });
     } finally {
       setActiveVoiceTarget((currentTarget) =>
         currentTarget === target ? null : currentTarget
@@ -204,7 +208,13 @@ const LessonDetail = () => {
                   </button>
                   <VoiceButton
                     isSpeaking={voice.isSpeaking && activeVoiceTarget === `option-${exercise.id}-${opt}`}
-                    onSpeak={() => void speakText(`option-${exercise.id}-${opt}`, opt)}
+                    onSpeak={() =>
+                      void speakText(
+                        `option-${exercise.id}-${opt}`,
+                        opt,
+                        getVoiceLanguageForText(opt, voiceLanguage),
+                      )
+                    }
                     className="self-center"
                   />
                 </div>

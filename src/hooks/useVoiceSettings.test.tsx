@@ -11,6 +11,8 @@ const defaultSettings = {
   volume: 1,
   muted: false,
   voiceGender: "female",
+  voiceName: "marin",
+  voicePersona: "supportive-tutor",
 };
 
 describe("useVoiceSettings", () => {
@@ -91,5 +93,36 @@ describe("useVoiceSettings", () => {
       rate: 1.1,
       volume: 0,
     });
+  });
+
+  it("falls back to the default voice when a stored voice does not match the chosen gender", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        voiceGender: "male",
+        voiceName: "marin",
+      })
+    );
+
+    const { result } = renderHook(() => useVoiceSettings());
+
+    expect(result.current.settings.voiceName).toBe("cedar");
+  });
+
+  it("syncs settings updates across hook instances", () => {
+    const firstHook = renderHook(() => useVoiceSettings());
+    const secondHook = renderHook(() => useVoiceSettings());
+
+    act(() => {
+      firstHook.result.current.updateSettings({
+        voiceGender: "male",
+        voiceName: "cedar",
+        voicePersona: "calm-guide",
+      });
+    });
+
+    expect(secondHook.result.current.settings.voiceGender).toBe("male");
+    expect(secondHook.result.current.settings.voiceName).toBe("cedar");
+    expect(secondHook.result.current.settings.voicePersona).toBe("calm-guide");
   });
 });

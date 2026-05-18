@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import Lessons from "./pages/Lessons";
 import LessonDetail from "./pages/LessonDetail";
 import Conversation from "./pages/Conversation";
+import ConversationLive from "./pages/ConversationLive";
 import Stories from "./pages/Stories";
 import StoryPlay from "./pages/StoryPlay";
 import Profile from "./pages/Profile";
@@ -46,6 +47,7 @@ const App = () => (
                 <Route path="/lessons" element={<Lessons />} />
                 <Route path="/lessons/:id" element={<LessonDetail />} />
                 <Route path="/conversation" element={<Conversation />} />
+                <Route path="/conversation/live" element={<ConversationLive />} />
                 <Route path="/stories" element={<Stories />} />
                 <Route path="/stories/:id" element={<StoryPlay />} />
                 <Route path="/profile" element={<Profile />} />

@@ -15,6 +15,8 @@ const settings: VoiceSettings = {
   volume: 1,
   muted: false,
   voiceGender: "female",
+  voiceName: "marin",
+  voicePersona: "supportive-tutor",
 };
 
 describe("voice components", () => {
@@ -70,7 +72,7 @@ describe("voice components", () => {
     fireEvent.click(screen.getByRole("button", { name: /^male voice$/i }));
 
     expect(updateSettings).toHaveBeenCalledWith({ rate: 0.75 });
-    expect(updateSettings).toHaveBeenCalledWith({ voiceGender: "male" });
+    expect(updateSettings).toHaveBeenCalledWith({ voiceGender: "male", voiceName: "cedar" });
     expect(screen.getByText(/browser fallback/i)).toBeInTheDocument();
   });
 });

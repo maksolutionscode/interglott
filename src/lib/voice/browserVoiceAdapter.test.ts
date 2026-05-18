@@ -13,6 +13,8 @@ const settings: VoiceSettings = {
   volume: 1,
   muted: false,
   voiceGender: "female",
+  voiceName: "marin",
+  voicePersona: "supportive-tutor",
 };
 
 describe("browserVoiceAdapter", () => {

@@ -2,3 +2,6 @@ project_id = "iooqlqqbxgatteodgwnx"
 
 [functions.voice-session]
 verify_jwt = false
+
+[functions.translate-transcript]
+verify_jwt = false

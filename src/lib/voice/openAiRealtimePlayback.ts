@@ -1,10 +1,14 @@
 import { requestRealtimeVoiceSession } from "./realtimeProvider";
 import type { RealtimeVoiceSessionConfig, VoiceRequest } from "./types";
+import { getPersonaInstructions } from "./voiceCatalog";
 
 type RealtimeServerEvent = {
   type?: string;
   error?: {
     message?: string;
+  };
+  response?: {
+    status?: string;
   };
 };
 
@@ -12,6 +16,8 @@ interface RealtimePlaybackOptions {
   request: VoiceRequest;
   sessionConfig: Omit<RealtimeVoiceSessionConfig, "provider" | "language" | "mode">;
   voiceGender: "female" | "male";
+  voiceName: RealtimeVoiceSessionConfig["voiceName"];
+  voicePersona: RealtimeVoiceSessionConfig["voicePersona"];
 }
 
 function canUseRealtimePlayback() {
@@ -27,6 +33,8 @@ export async function speakWithOpenAiRealtime({
   request,
   sessionConfig,
   voiceGender,
+  voiceName,
+  voicePersona,
 }: RealtimePlaybackOptions): Promise<void> {
   if (!canUseRealtimePlayback()) {
     throw new Error("Realtime playback is unavailable on this device.");
@@ -37,6 +45,8 @@ export async function speakWithOpenAiRealtime({
     language: request.language,
     mode: request.mode,
     voiceGender,
+    voiceName,
+    voicePersona,
     ...sessionConfig,
   });
 
@@ -99,18 +109,35 @@ export async function speakWithOpenAiRealtime({
     });
 
     await new Promise<void>((resolve, reject) => {
+      let audioStarted = false;
+      let audioStopped = false;
+      let responseCompleted = false;
+      let settled = false;
+
       const timeoutId = window.setTimeout(() => {
+        settled = true;
         reject(new Error("Realtime playback timed out."));
       }, 20000);
 
       const finish = () => {
+        if (settled) return;
+        settled = true;
         window.clearTimeout(timeoutId);
         resolve();
       };
 
       const fail = (message: string) => {
+        if (settled) return;
+        settled = true;
         window.clearTimeout(timeoutId);
         reject(new Error(message));
+      };
+
+      const maybeFinish = () => {
+        if (!responseCompleted) return;
+        if (!audioStarted || audioStopped) {
+          window.setTimeout(finish, 150);
+        }
       };
 
       dataChannel.addEventListener("open", () => {
@@ -119,7 +146,13 @@ export async function speakWithOpenAiRealtime({
             type: "response.create",
             response: {
               output_modalities: ["audio"],
-              instructions: `Pronounce the following exactly and naturally in ${request.language}: ${request.text}`,
+              instructions: [
+                "Read the provided text out loud exactly as written.",
+                "Do not translate, summarize, shorten, or continue the text.",
+                "Preserve the original language of the text and pronounce the full text from start to finish.",
+                getPersonaInstructions(voicePersona ?? "supportive-tutor"),
+                `Text: """${request.text}"""`,
+              ].join(" "),
             },
           }),
         );
@@ -138,8 +171,25 @@ export async function speakWithOpenAiRealtime({
           return;
         }
 
+        if (payload.type === "output_audio_buffer.started") {
+          audioStarted = true;
+          return;
+        }
+
+        if (payload.type === "output_audio_buffer.stopped") {
+          audioStopped = true;
+          maybeFinish();
+          return;
+        }
+
         if (payload.type === "response.done") {
-          finish();
+          if (payload.response?.status && payload.response.status !== "completed") {
+            fail(`Realtime playback ended with status "${payload.response.status}".`);
+            return;
+          }
+
+          responseCompleted = true;
+          maybeFinish();
         }
       });
 

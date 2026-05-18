@@ -50,12 +50,22 @@ export function canUseBrowserSpeechRecognition(): boolean {
   );
 }
 
-function pickVoice(language: VoiceLanguage, voiceGender: VoiceSettings["voiceGender"]) {
+function pickVoice(
+  language: VoiceLanguage,
+  voiceGender: VoiceSettings["voiceGender"],
+  preferredVoiceName?: VoiceSettings["voiceName"],
+) {
   const voices = window.speechSynthesis.getVoices();
   const languageVoices = voices.filter((voice) => voice.lang.startsWith(language));
+  const namedVoice = preferredVoiceName
+    ? languageVoices.find((voice) =>
+        `${voice.name} ${voice.voiceURI}`.toLowerCase().includes(preferredVoiceName)
+      )
+    : null;
   const genderHint = voiceGender === "female" ? /female|woman|zira|samantha|amelie/i : /male|man|david|daniel/i;
 
   return (
+    namedVoice ??
     languageVoices.find((voice) => genderHint.test(`${voice.name} ${voice.voiceURI}`)) ??
     languageVoices[0] ??
     null
@@ -75,7 +85,7 @@ export function speakWithBrowser(
     utterance.lang = request.language;
     utterance.rate = request.rate ?? settings.rate;
     utterance.volume = request.volume ?? settings.volume;
-    utterance.voice = pickVoice(request.language, settings.voiceGender);
+    utterance.voice = pickVoice(request.language, settings.voiceGender, settings.voiceName);
     utterance.onend = () => resolve();
     utterance.onerror = () =>
       reject(new Error("Voice playback is unavailable on this device."));

@@ -2,6 +2,22 @@ import { corsHeaders as supabaseCorsHeaders } from "jsr:@supabase/supabase-js@2/
 
 type VoiceProvider = "openai-realtime" | "gemini-live";
 type VoiceGender = "female" | "male";
+type VoiceName =
+  | "alloy"
+  | "ash"
+  | "ballad"
+  | "coral"
+  | "echo"
+  | "sage"
+  | "shimmer"
+  | "verse"
+  | "marin"
+  | "cedar";
+type VoicePersona =
+  | "supportive-tutor"
+  | "cheerful-coach"
+  | "calm-guide"
+  | "formal-examiner";
 
 interface VoiceSessionRequest {
   provider: VoiceProvider;
@@ -11,6 +27,8 @@ interface VoiceSessionRequest {
   mode: "lesson" | "chat" | "story" | "tcf-tef";
   tutorInstructions: string;
   voiceGender?: VoiceGender;
+  voiceName?: VoiceName;
+  voicePersona?: VoicePersona;
 }
 
 const corsHeaders = {
@@ -38,8 +56,23 @@ function isVoiceSessionRequest(value: unknown): value is VoiceSessionRequest {
   );
 }
 
-function getVoiceName(voiceGender: VoiceGender | undefined) {
+function getVoiceName(voiceGender: VoiceGender | undefined, voiceName?: VoiceName) {
+  if (voiceName) return voiceName;
   return voiceGender === "male" ? "cedar" : "marin";
+}
+
+function getPersonaInstructions(voicePersona: VoicePersona | undefined) {
+  switch (voicePersona) {
+    case "cheerful-coach":
+      return "Adopt a cheerful coach persona. Sound upbeat, motivating, and energetic while staying clear and natural.";
+    case "calm-guide":
+      return "Adopt a calm guide persona. Sound steady, low-pressure, and reassuring with a relaxed pace.";
+    case "formal-examiner":
+      return "Adopt a formal examiner persona. Sound structured, precise, and professional, especially for assessment-style practice.";
+    case "supportive-tutor":
+    default:
+      return "Adopt a supportive tutor persona. Sound warm, patient, and encouraging without being overly dramatic.";
+  }
 }
 
 function buildOpenAiSessionRequest(body: VoiceSessionRequest) {
@@ -47,7 +80,7 @@ function buildOpenAiSessionRequest(body: VoiceSessionRequest) {
     session: {
       type: "realtime",
       model: "gpt-realtime",
-      instructions: body.tutorInstructions,
+      instructions: `${body.tutorInstructions} ${getPersonaInstructions(body.voicePersona)}`.trim(),
       audio: {
         input: {
           noise_reduction: {
@@ -58,13 +91,14 @@ function buildOpenAiSessionRequest(body: VoiceSessionRequest) {
             language: body.language.slice(0, 2),
           },
           turn_detection: {
-            type: "server_vad",
+            type: "semantic_vad",
+            eagerness: "low",
             create_response: true,
             interrupt_response: true,
           },
         },
         output: {
-          voice: getVoiceName(body.voiceGender),
+          voice: getVoiceName(body.voiceGender, body.voiceName),
         },
       },
     },
