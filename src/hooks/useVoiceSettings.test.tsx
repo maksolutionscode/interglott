@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useVoiceSettings } from "./useVoiceSettings";
 
@@ -14,6 +14,10 @@ const defaultSettings = {
 };
 
 describe("useVoiceSettings", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_VOICE_PROVIDER", "");
+  });
+
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllEnvs();
