@@ -56,7 +56,7 @@ const SelectLanguage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-10 pb-16 sm:pb-20 relative overflow-hidden">
       {/* Glow */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-primary/15 blur-[100px]" />
 
