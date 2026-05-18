@@ -3,14 +3,24 @@ import { getLessonByIdForLanguage } from "@/data/lessonsByLanguage";
 import { useProgress } from "@/contexts/UserProgressContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useGameAudio } from "@/hooks/useGameAudio";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceSettings } from "@/hooks/useVoiceSettings";
+import { useVoiceSynthesis } from "@/hooks/useVoiceSynthesis";
 import { calculateXP } from "@/lib/gamification";
-import { useState } from "react";
+import { buildPronunciationFeedback, normalizeSpeechText } from "@/lib/voice/pronunciation";
+import { getVoiceLanguage } from "@/lib/voice/language";
+import type { PronunciationFeedback } from "@/lib/voice/types";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Check, X, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { OutOfCreditsModal } from "@/components/OutOfCreditsModal";
+import { MicButton } from "@/components/voice/MicButton";
+import { PronunciationFeedbackCard } from "@/components/voice/PronunciationFeedbackCard";
+import { VoiceButton } from "@/components/voice/VoiceButton";
+import { VoiceTranscript } from "@/components/voice/VoiceTranscript";
 
 const LessonDetail = () => {
   const { id } = useParams();
@@ -18,6 +28,14 @@ const LessonDetail = () => {
   const { addXP, completeLesson, streak, completedLessons, learningLanguage } = useProgress();
   const { canAfford, spendCredits } = useCredits();
   const audio = useGameAudio();
+  const { settings } = useVoiceSettings();
+  const voiceLanguage = getVoiceLanguage(learningLanguage);
+  const voice = useVoiceSynthesis({
+    language: voiceLanguage,
+    mode: "lesson",
+    settings,
+  });
+  const recognition = useVoiceRecognition({ language: voiceLanguage });
   const lesson = getLessonByIdForLanguage(learningLanguage, id || "");
 
   const [currentEx, setCurrentEx] = useState(0);
@@ -29,9 +47,40 @@ const LessonDetail = () => {
   const [finished, setFinished] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [creditsDeducted, setCreditsDeducted] = useState(false);
+  const [spokenTranscript, setSpokenTranscript] = useState("");
+  const [voicePrompt, setVoicePrompt] = useState<string | null>(null);
+  const [pronunciationFeedback, setPronunciationFeedback] = useState<PronunciationFeedback | null>(null);
+  const exercise = lesson?.exercises[currentEx];
   const backUrl = lesson ? `/lessons?level=${lesson.level}` : "/lessons";
 
-  if (!lesson) {
+  useEffect(() => {
+    if (!exercise || !recognition.transcript) return;
+
+    const transcript = recognition.transcript.trim();
+    setSpokenTranscript(transcript);
+    setVoicePrompt(null);
+
+    if (exercise.type === "fill-blank") {
+      setInputVal(transcript);
+      return;
+    }
+
+    if (exercise.type === "multiple-choice" && exercise.options) {
+      const spokenAnswer = normalizeSpeechText(transcript);
+      const matchingOption = exercise.options.find(
+        (option) => normalizeSpeechText(option) === spokenAnswer
+      );
+
+      if (matchingOption) {
+        setSelected(matchingOption);
+        return;
+      }
+
+      setVoicePrompt("I heard you, but could not match that to an option. Please try again.");
+    }
+  }, [exercise, recognition.transcript]);
+
+  if (!lesson || !exercise) {
     return (
       <div className="pt-6 text-center">
         <p className="text-muted-foreground">Lesson not found</p>
@@ -40,7 +89,6 @@ const LessonDetail = () => {
     );
   }
 
-  const exercise = lesson.exercises[currentEx];
   const isAlreadyCompleted = completedLessons.includes(lesson.id);
 
   const checkAnswer = () => {
@@ -57,6 +105,11 @@ const LessonDetail = () => {
     const isCorrect = userAnswer?.toLowerCase() === exercise.correctAnswer.toLowerCase();
     setCorrect(isCorrect);
     setAnswered(true);
+    setPronunciationFeedback(
+      spokenTranscript
+        ? buildPronunciationFeedback(exercise.correctAnswer, spokenTranscript)
+        : null
+    );
     if (isCorrect) {
       setScore((s) => s + 1);
       audio.onCorrectAnswer();
@@ -71,6 +124,9 @@ const LessonDetail = () => {
       setSelected(null);
       setInputVal("");
       setAnswered(false);
+      setSpokenTranscript("");
+      setVoicePrompt(null);
+      setPronunciationFeedback(null);
     } else {
       setFinished(true);
       audio.onLessonComplete();
@@ -140,35 +196,47 @@ const LessonDetail = () => {
           exit={{ opacity: 0, x: -30 }}
           className="glass-card rounded-2xl p-6 space-y-5"
         >
-          <p className="font-display font-semibold text-foreground text-lg">{exercise.question}</p>
+          <div className="flex items-start gap-3">
+            <p className="flex-1 font-display font-semibold text-foreground text-lg">{exercise.question}</p>
+            <VoiceButton
+              isSpeaking={voice.isSpeaking}
+              onSpeak={() => voice.speak(exercise.question)}
+            />
+          </div>
 
           {exercise.type === "multiple-choice" && exercise.options && (
             <div className="space-y-2">
               {exercise.options.map((opt) => (
-                <button
-                  key={opt}
-                  disabled={answered}
-                  onClick={() => setSelected(opt)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 rounded-xl border transition-all text-sm",
-                    !answered && selected === opt && "border-primary bg-primary/10 text-foreground",
-                    !answered && selected !== opt && "border-border bg-secondary/30 text-foreground hover:border-primary/50",
-                    answered && opt.toLowerCase() === exercise.correctAnswer.toLowerCase() && "border-success bg-success/10 text-success",
-                    answered && selected === opt && opt.toLowerCase() !== exercise.correctAnswer.toLowerCase() && "border-destructive bg-destructive/10 text-destructive"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    {opt}
-                    {answered && opt.toLowerCase() === exercise.correctAnswer.toLowerCase() && <Check className="h-4 w-4" />}
-                    {answered && selected === opt && opt.toLowerCase() !== exercise.correctAnswer.toLowerCase() && <X className="h-4 w-4" />}
-                  </div>
-                </button>
+                <div key={opt} className="flex items-stretch gap-2">
+                  <button
+                    disabled={answered}
+                    onClick={() => setSelected(opt)}
+                    className={cn(
+                      "min-h-12 flex-1 text-left px-4 py-3 rounded-xl border transition-all text-sm",
+                      !answered && selected === opt && "border-primary bg-primary/10 text-foreground",
+                      !answered && selected !== opt && "border-border bg-secondary/30 text-foreground hover:border-primary/50",
+                      answered && opt.toLowerCase() === exercise.correctAnswer.toLowerCase() && "border-success bg-success/10 text-success",
+                      answered && selected === opt && opt.toLowerCase() !== exercise.correctAnswer.toLowerCase() && "border-destructive bg-destructive/10 text-destructive"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{opt}</span>
+                      {answered && opt.toLowerCase() === exercise.correctAnswer.toLowerCase() && <Check className="h-4 w-4 shrink-0" />}
+                      {answered && selected === opt && opt.toLowerCase() !== exercise.correctAnswer.toLowerCase() && <X className="h-4 w-4 shrink-0" />}
+                    </div>
+                  </button>
+                  <VoiceButton
+                    isSpeaking={voice.isSpeaking}
+                    onSpeak={() => voice.speak(opt)}
+                    className="self-center"
+                  />
+                </div>
               ))}
             </div>
           )}
 
           {exercise.type === "fill-blank" && (
-            <div>
+            <div className="space-y-3">
               <Input
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
@@ -182,14 +250,48 @@ const LessonDetail = () => {
                 onKeyDown={(e) => e.key === "Enter" && !answered && (exercise.type === "fill-blank" ? inputVal.trim() : selected) && checkAnswer()}
               />
               {answered && !correct && (
-                <p className="text-sm text-success mt-2">Correct answer: {exercise.correctAnswer}</p>
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <span>Correct answer: {exercise.correctAnswer}</span>
+                  <VoiceButton
+                    isSpeaking={voice.isSpeaking}
+                    onSpeak={() => voice.speak(exercise.correctAnswer)}
+                    replay
+                  />
+                </div>
               )}
             </div>
           )}
 
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-secondary/30 p-3">
+              <MicButton
+                isListening={recognition.isListening}
+                onStart={recognition.start}
+                onStop={recognition.stop}
+                disabled={answered}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {recognition.isListening ? "Listening..." : "Answer by voice"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Speak the option or answer out loud.
+                </p>
+              </div>
+            </div>
+            <VoiceTranscript transcript={spokenTranscript} label="You said" />
+            {(recognition.error || voicePrompt || voice.error) && (
+              <p className="text-xs text-destructive">
+                {recognition.error || voicePrompt || voice.error}
+              </p>
+            )}
+          </div>
+
           {exercise.hint && !answered && (
             <p className="text-xs text-muted-foreground italic">💡 Hint: {exercise.hint}</p>
           )}
+
+          <PronunciationFeedbackCard feedback={pronunciationFeedback} />
         </motion.div>
       </AnimatePresence>
 
