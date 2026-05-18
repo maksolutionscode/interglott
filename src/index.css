@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand palette: navy / slate / gold */
+    --brand-navy: 212 52% 25%;     /* #1E3A5F */
+    --brand-slate: 214 38% 47%;    /* #4A6FA5 */
+    --brand-gold: 42 63% 55%;      /* #D4A843 */
+    --brand-surface: 214 27% 97%;  /* #F5F7FA */
+    --brand-ink: 212 38% 16%;      /* #1A2A3A */
+    --brand-mute: 211 13% 49%;     /* #6B7B8D */
+
+    --background: var(--brand-surface);
+    --foreground: var(--brand-ink);
+
+    --card: 0 0% 100%;
+    --card-foreground: var(--brand-ink);
+
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--brand-ink);
+
+    --primary: var(--brand-navy);
+    --primary-foreground: var(--brand-surface);
+
+    --secondary: var(--brand-surface);
+    --secondary-foreground: var(--brand-ink);
+
+    --muted: 214 20% 92%;
+    --muted-foreground: var(--brand-mute);
+
+    --accent: var(--brand-gold);
+    --accent-foreground: var(--brand-ink);
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 150 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --xp: var(--brand-gold);
+    --xp-foreground: var(--brand-ink);
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 10%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: var(--brand-slate);
+
+    --radius: 0.75rem;
+
+    --sidebar-background: var(--brand-navy);
+    --sidebar-foreground: var(--brand-surface);
+    --sidebar-primary: var(--brand-gold);
+    --sidebar-primary-foreground: var(--brand-ink);
+    --sidebar-accent: var(--brand-slate);
+    --sidebar-accent-foreground: var(--brand-surface);
+    --sidebar-border: 212 40% 30%;
+    --sidebar-ring: var(--brand-gold);
+
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  /* Prevent pull-to-refresh on mobile */
+  #root {
+    overscroll-behavior-y: contain;
+    min-height: 100dvh;
+  }
+
+  /* Use dynamic viewport height for mobile browsers */
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+
+  /* Smooth scrolling for iOS momentum */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Remove tap delay on iOS */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Ensure minimum tap target size (44x44px per Apple HIG) */
+  button:not(.btn-icon-sm),
+  a:not(.link-inline),
+  [role="button"] {
+    min-height: 44px;
+  }
+}
+
+@layer utilities {
+  .font-accent {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .font-numeric {
+    font-family: 'Space Grotesk', sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gradient-purple {
+    background: linear-gradient(135deg, hsl(var(--brand-navy)), hsl(var(--brand-slate)));
+  }
+
+  .gradient-purple-text {
+    background: linear-gradient(135deg, hsl(var(--brand-navy)), hsl(var(--brand-slate)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-xp {
+    background: linear-gradient(90deg, hsl(var(--brand-navy)), hsl(var(--brand-slate)), hsl(var(--brand-gold)));
+  }
+
+  .glass-card {
+    background: hsl(0 0% 100% / 0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--brand-slate) / 0.2);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 30px hsl(var(--brand-navy) / 0.25), 0 0 60px hsl(var(--brand-slate) / 0.15);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(var(--brand-gold) / 0.4);
+  }
+
+  .glow-xp {
+    box-shadow: 0 0 20px hsl(var(--brand-gold) / 0.35);
+  }
+
+  /* Safe area utilities */
+  .safe-area-pt {
+    padding-top: var(--safe-area-inset-top);
+  }
+
+  .safe-area-pb {
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+
+  .safe-area-px {
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
+  }
+
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Active press feedback for mobile */
+  .active-scale {
+    transition: transform 0.1s ease;
+  }
+  .active-scale:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px hsl(var(--brand-gold) / 0.2); }
+  50% { box-shadow: 0 0 40px hsl(var(--brand-gold) / 0.5); }
+}
+
+@keyframes streak-fire {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.1); filter: brightness(1.3); }
+}
