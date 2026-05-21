@@ -50,23 +50,97 @@ export function canUseBrowserSpeechRecognition(): boolean {
   );
 }
 
+const GENDER_HINTS = {
+  female: [
+    "female",
+    "woman",
+    "zira",
+    "samantha",
+    "amelie",
+    "victoria",
+    "ava",
+    "aria",
+    "monica",
+    "pauline",
+    "audrey",
+    "brigitte",
+    "helena",
+    "anna",
+    "karen",
+  ],
+  male: [
+    "male",
+    "man",
+    "david",
+    "daniel",
+    "cedric",
+    "alex",
+    "jorge",
+    "diego",
+    "thomas",
+    "nicolas",
+    "antoine",
+    "oliver",
+    "fred",
+    "martin",
+    "yannick",
+  ],
+} as const;
+
+function scoreVoice(
+  voice: SpeechSynthesisVoice,
+  language: VoiceLanguage,
+  voiceGender: VoiceSettings["voiceGender"],
+) {
+  const haystack = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+  const exactLanguage = voice.lang.toLowerCase() === language.toLowerCase();
+  const languageFamily = voice.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase());
+  const explicitGender = (
+    voice as SpeechSynthesisVoice & { gender?: string }
+  ).gender?.toLowerCase();
+  const matchingHints = GENDER_HINTS[voiceGender].filter((hint) => haystack.includes(hint)).length;
+  const oppositeGender = voiceGender === "female" ? "male" : "female";
+  const oppositeHints =
+    GENDER_HINTS[oppositeGender].filter((hint) => haystack.includes(hint)).length;
+
+  let score = 0;
+
+  if (exactLanguage) score += 50;
+  else if (languageFamily) score += 30;
+
+  if (voice.localService) score += 10;
+  if (matchingHints > 0) score += 40 + matchingHints * 5;
+  if (oppositeHints > 0) score -= 35 + oppositeHints * 5;
+
+  if (explicitGender === voiceGender) score += 70;
+  else if (explicitGender === oppositeGender) score -= 70;
+
+  return score;
+}
+
 function pickVoice(
   language: VoiceLanguage,
   voiceGender: VoiceSettings["voiceGender"],
   preferredVoiceName?: VoiceSettings["voiceName"],
 ) {
   const voices = window.speechSynthesis.getVoices();
-  const languageVoices = voices.filter((voice) => voice.lang.startsWith(language));
+  const languagePrefix = language.slice(0, 2).toLowerCase();
+  const languageVoices = voices.filter((voice) =>
+    voice.lang.toLowerCase().startsWith(languagePrefix)
+  );
   const namedVoice = preferredVoiceName
     ? languageVoices.find((voice) =>
         `${voice.name} ${voice.voiceURI}`.toLowerCase().includes(preferredVoiceName)
       )
     : null;
-  const genderHint = voiceGender === "female" ? /female|woman|zira|samantha|amelie/i : /male|man|david|daniel/i;
 
   return (
     namedVoice ??
-    languageVoices.find((voice) => genderHint.test(`${voice.name} ${voice.voiceURI}`)) ??
+    [...languageVoices].sort((left, right) => {
+      const scoreDelta = scoreVoice(right, language, voiceGender) - scoreVoice(left, language, voiceGender);
+      if (scoreDelta !== 0) return scoreDelta;
+      return left.name.localeCompare(right.name);
+    })[0] ??
     languageVoices[0] ??
     null
   );
