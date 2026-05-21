@@ -12,7 +12,6 @@ import { ArrowLeft, CheckCircle2, XCircle, Star, Zap } from "lucide-react";
 import { OutOfCreditsModal } from "@/components/OutOfCreditsModal";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { getVoiceLanguage } from "@/lib/voice/language";
-import { applyPersonaInstructions } from "@/lib/voice/voiceCatalog";
 
 const StoryPlay = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,10 +30,8 @@ const StoryPlay = () => {
     realtimeConfig: {
       learningLanguage: story?.language ?? "french",
       level: story?.level ?? "beginner",
-      tutorInstructions: applyPersonaInstructions(
+      tutorInstructions:
         "Read the provided story text naturally and clearly. Keep the original language of the text and never translate it.",
-        settings.voicePersona,
-      ),
     },
   });
 

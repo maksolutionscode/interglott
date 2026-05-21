@@ -29,6 +29,7 @@ interface VoiceSessionRequest {
   voiceGender?: VoiceGender;
   voiceName?: VoiceName;
   voicePersona?: VoicePersona;
+  verbatimOnly?: boolean;
 }
 
 const corsHeaders = {
@@ -76,11 +77,15 @@ function getPersonaInstructions(voicePersona: VoicePersona | undefined) {
 }
 
 function buildOpenAiSessionRequest(body: VoiceSessionRequest) {
+  const sessionInstructions = body.verbatimOnly
+    ? body.tutorInstructions.trim()
+    : `${body.tutorInstructions} ${getPersonaInstructions(body.voicePersona)}`.trim();
+
   return {
     session: {
       type: "realtime",
       model: "gpt-realtime",
-      instructions: `${body.tutorInstructions} ${getPersonaInstructions(body.voicePersona)}`.trim(),
+      instructions: sessionInstructions,
       audio: {
         input: {
           noise_reduction: {

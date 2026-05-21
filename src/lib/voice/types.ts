@@ -64,4 +64,5 @@ export interface RealtimeVoiceSessionConfig {
   voiceGender?: VoiceGender;
   voiceName?: RealtimeVoiceName;
   voicePersona?: VoicePersona;
+  verbatimOnly?: boolean;
 }

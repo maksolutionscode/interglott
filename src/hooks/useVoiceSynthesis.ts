@@ -16,7 +16,7 @@ interface UseVoiceSynthesisOptions {
   settings: VoiceSettings;
   realtimeConfig?: Omit<
     RealtimeVoiceSessionConfig,
-    "provider" | "language" | "mode" | "voiceGender" | "voiceName" | "voicePersona"
+    "provider" | "language" | "mode" | "voiceGender" | "voiceName" | "voicePersona" | "verbatimOnly"
   >;
 }
 
@@ -54,6 +54,7 @@ export function useVoiceSynthesis({
               voiceGender: settings.voiceGender,
               voiceName: settings.voiceName,
               voicePersona: settings.voicePersona,
+              verbatimOnly: true,
             });
             return;
           } catch (realtimeError) {

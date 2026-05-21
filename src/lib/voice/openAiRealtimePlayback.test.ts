@@ -159,8 +159,48 @@ describe("openAiRealtimePlayback", () => {
     );
 
     expect(payload.response.instructions).toContain("Do not translate");
+    expect(payload.response.instructions).toContain("Do not introduce the text");
     expect(payload.response.instructions).toContain('Text: """Hello"""');
 
+    lastDataChannel?.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "response.done",
+          response: { status: "completed" },
+        }),
+      }),
+    );
+
+    await playbackPromise;
+  });
+
+  it("requests a verbatim-only realtime session for pure playback", async () => {
+    const playbackPromise = speakWithOpenAiRealtime({
+      request: {
+        text: "I am in the house",
+        language: "en-US",
+        mode: "lesson",
+      },
+      sessionConfig: {
+        learningLanguage: "french",
+        level: "beginner",
+        tutorInstructions: "Read the lesson option.",
+      },
+      voiceGender: "female",
+      voiceName: "marin",
+      voicePersona: "supportive-tutor",
+      verbatimOnly: true,
+    });
+
+    await waitForPlaybackSetup();
+
+    expect(requestRealtimeVoiceSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verbatimOnly: true,
+      }),
+    );
+
+    lastDataChannel?.dispatchEvent(new Event("open"));
     lastDataChannel?.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({

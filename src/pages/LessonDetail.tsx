@@ -9,7 +9,6 @@ import { calculateXP } from "@/lib/gamification";
 import { buildPronunciationFeedback } from "@/lib/voice/pronunciation";
 import { getVoiceLanguage, getVoiceLanguageForText } from "@/lib/voice/language";
 import type { PronunciationFeedback } from "@/lib/voice/types";
-import { applyPersonaInstructions } from "@/lib/voice/voiceCatalog";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,10 +35,8 @@ const LessonDetail = () => {
     realtimeConfig: {
       learningLanguage,
       level: lesson?.level ?? "beginner",
-      tutorInstructions: applyPersonaInstructions(
+      tutorInstructions:
         "Pronounce each lesson option naturally and clearly. Only say the provided option text, keep its original language, and never translate it.",
-        settings.voicePersona,
-      ),
     },
   });
 

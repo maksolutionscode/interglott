@@ -69,15 +69,12 @@ export default function ConversationLive() {
     realtimeConfig: {
       learningLanguage,
       level,
-      tutorInstructions: applyPersonaInstructions(
-        [
-          "Read the provided message naturally.",
-          "Ignore decorative formatting, emojis, flags, and symbols.",
-          "Only pronounce the readable content exactly as written.",
-          "Preserve the text's original language and never translate it.",
-        ].join(" "),
-        settings.voicePersona,
-      ),
+      tutorInstructions: [
+        "Read the provided message naturally.",
+        "Ignore decorative formatting, emojis, flags, and symbols.",
+        "Only pronounce the readable content exactly as written.",
+        "Preserve the text's original language and never translate it.",
+      ].join(" "),
     },
   });
 

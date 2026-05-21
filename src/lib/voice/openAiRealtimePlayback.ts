@@ -1,6 +1,5 @@
 import { requestRealtimeVoiceSession } from "./realtimeProvider";
 import type { RealtimeVoiceSessionConfig, VoiceRequest } from "./types";
-import { getPersonaInstructions } from "./voiceCatalog";
 
 type RealtimeServerEvent = {
   type?: string;
@@ -18,6 +17,7 @@ interface RealtimePlaybackOptions {
   voiceGender: "female" | "male";
   voiceName: RealtimeVoiceSessionConfig["voiceName"];
   voicePersona: RealtimeVoiceSessionConfig["voicePersona"];
+  verbatimOnly?: boolean;
 }
 
 function canUseRealtimePlayback() {
@@ -35,6 +35,7 @@ export async function speakWithOpenAiRealtime({
   voiceGender,
   voiceName,
   voicePersona,
+  verbatimOnly = false,
 }: RealtimePlaybackOptions): Promise<void> {
   if (!canUseRealtimePlayback()) {
     throw new Error("Realtime playback is unavailable on this device.");
@@ -47,6 +48,7 @@ export async function speakWithOpenAiRealtime({
     voiceGender,
     voiceName,
     voicePersona,
+    verbatimOnly,
     ...sessionConfig,
   });
 
@@ -149,8 +151,8 @@ export async function speakWithOpenAiRealtime({
               instructions: [
                 "Read the provided text out loud exactly as written.",
                 "Do not translate, summarize, shorten, or continue the text.",
+                "Do not introduce the text, explain it, coach the learner, or add closing remarks.",
                 "Preserve the original language of the text and pronounce the full text from start to finish.",
-                getPersonaInstructions(voicePersona ?? "supportive-tutor"),
                 `Text: """${request.text}"""`,
               ].join(" "),
             },
