@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { VoiceProvider, VoiceSettings } from "@/lib/voice/types";
+import type { AiVoiceProvider, VoiceProvider, VoiceSettings } from "@/lib/voice/types";
 import {
   getDefaultVoiceName,
   isVoiceNameInGenderGroup,
@@ -26,9 +26,15 @@ function getDefaultProvider(): VoiceProvider {
     : "browser-fallback";
 }
 
+function getDefaultAiProvider(): AiVoiceProvider {
+  const configuredProvider = getDefaultProvider();
+  return configuredProvider === "browser-fallback" ? "openai-realtime" : configuredProvider;
+}
+
 function getDefaultSettings(): VoiceSettings {
   return {
     provider: getDefaultProvider(),
+    aiProvider: getDefaultAiProvider(),
     rate: 1,
     volume: 1,
     muted: false,
@@ -40,12 +46,22 @@ function getDefaultSettings(): VoiceSettings {
 
 function normalizeSettings(settings: VoiceSettings): VoiceSettings {
   const voiceGender = settings.voiceGender ?? "female";
+  const aiProvider =
+    settings.aiProvider === "gemini-live" || settings.aiProvider === "openai-realtime"
+      ? settings.aiProvider
+      : getDefaultAiProvider();
   const normalizedVoiceName = isVoiceNameInGenderGroup(settings.voiceName, voiceGender)
     ? settings.voiceName
     : getDefaultVoiceName(voiceGender);
+  const provider =
+    settings.provider === "browser-fallback"
+      ? "browser-fallback"
+      : aiProvider;
 
   return {
     ...settings,
+    provider,
+    aiProvider,
     rate: clamp(settings.rate, 0.65, 1.1),
     volume: clamp(settings.volume, 0, 1),
     voiceGender,

@@ -22,6 +22,11 @@ const providerLabel: Record<VoiceSettings["provider"], string> = {
   "browser-fallback": "Browser fallback",
 };
 
+const aiProviderLabel: Record<VoiceSettings["aiProvider"], string> = {
+  "openai-realtime": "OpenAI Realtime",
+  "gemini-live": "Gemini Live",
+};
+
 export function VoiceSettingsControls({
   settings,
   updateSettings,
@@ -47,6 +52,56 @@ export function VoiceSettingsControls({
             aria-label="Toggle voice audio"
           />
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Browser fallback</p>
+          <p className="text-xs text-muted-foreground">
+            Use browser speech for playback and recognition instead of AI voice services.
+          </p>
+        </div>
+        <Switch
+          checked={settings.provider === "browser-fallback"}
+          onCheckedChange={(checked) =>
+            updateSettings({
+              provider: checked ? "browser-fallback" : settings.aiProvider,
+            })
+          }
+          aria-label="Toggle browser fallback voice"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div>
+          <p className="text-sm font-semibold text-foreground">AI provider</p>
+          <p className="text-xs text-muted-foreground">
+            Choose which AI voice engine to return to when browser fallback is off.
+          </p>
+        </div>
+        <Select
+          value={settings.aiProvider}
+          onValueChange={(value) =>
+            updateSettings({
+              aiProvider: value as VoiceSettings["aiProvider"],
+              provider:
+                settings.provider === "browser-fallback"
+                  ? settings.provider
+                  : (value as VoiceSettings["aiProvider"]),
+            })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select an AI provider" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(aiProviderLabel).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

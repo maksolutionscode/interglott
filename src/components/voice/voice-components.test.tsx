@@ -11,6 +11,7 @@ import type { VoiceSettings } from "@/lib/voice/types";
 
 const settings: VoiceSettings = {
   provider: "browser-fallback",
+  aiProvider: "openai-realtime",
   rate: 1,
   volume: 1,
   muted: false,
@@ -70,9 +71,11 @@ describe("voice components", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /slow/i }));
     fireEvent.click(screen.getByRole("button", { name: /^male voice$/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /toggle browser fallback voice/i }));
 
     expect(updateSettings).toHaveBeenCalledWith({ rate: 0.75 });
     expect(updateSettings).toHaveBeenCalledWith({ voiceGender: "male", voiceName: "cedar" });
-    expect(screen.getByText(/browser fallback/i)).toBeInTheDocument();
+    expect(updateSettings).toHaveBeenCalledWith({ provider: "openai-realtime" });
+    expect(screen.getByRole("switch", { name: /toggle browser fallback voice/i })).toBeInTheDocument();
   });
 });

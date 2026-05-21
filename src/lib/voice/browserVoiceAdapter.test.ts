@@ -9,6 +9,7 @@ import type { VoiceSettings } from "./types";
 
 const settings: VoiceSettings = {
   provider: "browser-fallback",
+  aiProvider: "openai-realtime",
   rate: 1,
   volume: 1,
   muted: false,

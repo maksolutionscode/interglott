@@ -7,6 +7,7 @@ const STORAGE_KEY = "interglott-voice-settings";
 
 const defaultSettings = {
   provider: "browser-fallback",
+  aiProvider: "openai-realtime",
   rate: 1,
   volume: 1,
   muted: false,
@@ -37,6 +38,7 @@ describe("useVoiceSettings", () => {
     const { result } = renderHook(() => useVoiceSettings());
 
     expect(result.current.settings.provider).toBe("gemini-live");
+    expect(result.current.settings.aiProvider).toBe("gemini-live");
   });
 
   it("merges stored partial settings with defaults", () => {
@@ -107,6 +109,20 @@ describe("useVoiceSettings", () => {
     const { result } = renderHook(() => useVoiceSettings());
 
     expect(result.current.settings.voiceName).toBe("cedar");
+  });
+
+  it("keeps the selected aiProvider when browser fallback is active", () => {
+    const { result } = renderHook(() => useVoiceSettings());
+
+    act(() => {
+      result.current.updateSettings({
+        aiProvider: "gemini-live",
+        provider: "browser-fallback",
+      });
+    });
+
+    expect(result.current.settings.provider).toBe("browser-fallback");
+    expect(result.current.settings.aiProvider).toBe("gemini-live");
   });
 
   it("syncs settings updates across hook instances", () => {

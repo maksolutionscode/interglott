@@ -2,6 +2,7 @@ import type { LearningLanguage } from "@/contexts/UserProgressContext";
 
 export type VoiceLanguage = "en-US" | "fr-FR" | "es-ES" | "zh-CN" | "de-DE" | "ar-SA";
 export type VoiceProvider = "openai-realtime" | "gemini-live" | "browser-fallback";
+export type AiVoiceProvider = Exclude<VoiceProvider, "browser-fallback">;
 export type VoiceGender = "female" | "male";
 export type VoiceMode = "lesson" | "chat" | "story" | "tcf-tef";
 export type RealtimeVoiceName =
@@ -23,6 +24,7 @@ export type VoicePersona =
 
 export interface VoiceSettings {
   provider: VoiceProvider;
+  aiProvider: AiVoiceProvider;
   rate: number;
   volume: number;
   muted: boolean;
